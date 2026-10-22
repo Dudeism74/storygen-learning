@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directories:
+      - '/*/frontend'
+      - /tests
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: pip
+    directories:
+      - /00_Starting_Here
+      - /04a_Manual_Deployment_Ready/backend
+      - /04b_Manual_Deployment_Done/backend
+      - /05a_CICD_Pipeline_Ready/backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

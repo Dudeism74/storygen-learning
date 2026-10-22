@@ -15,7 +15,7 @@
 # • Safe execution with prerequisite checking
 #
 # Prerequisites:
-# 1. Python 3.8+ installed
+# 1. Python 3.12+ installed
 # 2. Google Cloud Project with billing enabled
 # 3. gcloud CLI installed and authenticated (gcloud auth login)
 # 4. Project owner/editor permissions
@@ -102,9 +102,9 @@ validate_prerequisites() {
     log "🔍 Validating prerequisites..."
     
     # Check Python
-    if ! command -v python3 &> /dev/null; then
+    if ! command -v python3 &> /dev/null || ! python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 12))'; then
         echo -e "${RED}❌ Python 3 is required but not installed${NC}"
-        echo "Please install Python 3.8+ first: https://python.org/downloads/"
+        echo "Please install Python 3.12+ first: https://python.org/downloads/"
         exit 1
     fi
     echo -e "${GREEN}✅ Python 3 found: $(python3 --version)${NC}"

@@ -219,7 +219,7 @@ async def run_two_agent_workflow(websocket: WebSocket, user_id: str, keywords: s
         logger.error(f"❌ Story generation failed for user {user_id}: {e}")
         import traceback
         logger.error(f"📋 Full story generation traceback: {traceback.format_exc()}")
-        await websocket.send_text(json.dumps({"type": "error", "message": f"Story generation failed: {str(e)}"}))
+        await websocket.send_text(json.dumps({"type": "error", "message": "Story generation is temporarily unavailable. Please try again."}))
         return
 
     # Step 2: Generate images using DirectImageAgent
@@ -283,7 +283,7 @@ async def run_two_agent_workflow(websocket: WebSocket, user_id: str, keywords: s
                     "scene_title": scene.get("title", ""),
                     "format": "png",
                     "stored_in_bucket": False,
-                    "error": f"Image generation failed: {str(e)}",
+                    "error": "Image generation is temporarily unavailable.",
                     "placeholder": True
                 }
                 await websocket.send_text(json.dumps({
@@ -306,6 +306,31 @@ async def run_two_agent_workflow(websocket: WebSocket, user_id: str, keywords: s
     # Send completion notification
     await websocket.send_text(json.dumps({"type": "turn_complete", "turn_complete": True}))
 
+
+
+# Limit work accepted from the public WebSocket before calling paid AI services.
+MAX_MESSAGE_BYTES = 16 * 1024
+MAX_KEYWORD_CHARACTERS = 2000
+
+
+def parse_client_message(raw):
+    if not isinstance(raw, str) or len(raw.encode("utf-8")) > MAX_MESSAGE_BYTES:
+        raise ValueError("Invalid message")
+    try:
+        message = json.loads(raw)
+    except (ValueError, RecursionError):
+        raise ValueError("Invalid message") from None
+    if not isinstance(message, dict):
+        raise ValueError("Invalid message")
+    kind = message.get("type")
+    if kind == "ping":
+        return "ping", ""
+    if kind != "generate_story":
+        raise ValueError("Invalid message")
+    keywords = message.get("data")
+    if not isinstance(keywords, str) or not 1 <= len(keywords.strip()) <= MAX_KEYWORD_CHARACTERS:
+        raise ValueError("Invalid message")
+    return kind, keywords.strip()
 
 
 @app.websocket("/ws/{user_id}")
@@ -331,14 +356,17 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
             # Receive message from client
             logger.info(f"⏳ Waiting for message from user {user_id}")
             message_json = await websocket.receive_text()
-            logger.info(f"📩 Received raw message from user {user_id}: {message_json}")
-            message = json.loads(message_json)
-            
-            message_type = message.get("type")
-            data = message.get("data", "")
-            
+            try:
+                message_type, data = parse_client_message(message_json)
+            except ValueError:
+                await websocket.send_text(json.dumps({
+                    "type": "error",
+                    "message": "Enter story keywords between 1 and 2,000 characters."
+                }))
+                continue
+
             if message_type == "generate_story":
-                logger.info(f"🎯 Story generation request received from user {user_id}: '{data}'")
+                logger.info("Story generation request received")
                 try:
                     # Send processing notification
                     await websocket.send_text(json.dumps({
@@ -358,7 +386,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     logger.error(f"📋 Full traceback: {traceback.format_exc()}")
                     await websocket.send_text(json.dumps({
                         "type": "error",
-                        "message": f"Story generation failed: {str(e)}"
+                        "message": "Story generation is temporarily unavailable. Please try again."
                     }))
                 
             elif message_type == "ping":
@@ -375,7 +403,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
         try:
             await websocket.send_text(json.dumps({
                 "type": "error",
-                "message": f"Server error: {str(e)}"
+                "message": "The server could not process this request. Please reconnect."
             }))
         except:
             pass

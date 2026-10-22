@@ -1,0 +1,9 @@
+{
+  "name": "storygen-security-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "linkedom": "0.18.14"
+  }
+}
