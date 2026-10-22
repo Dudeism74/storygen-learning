@@ -5,8 +5,8 @@
 echo "🚀 Setting up shared virtual environment for StoryGen project..."
 
 # Check if Python is installed
-if ! command -v python3 &> /dev/null; then
-    echo "❌ Python 3 is required but not installed. Please install Python 3.8+ first."
+if ! command -v python3 &> /dev/null || ! python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 12))'; then
+    echo "❌ Python 3 is required but not installed. Please install Python 3.12+ first."
     exit 1
 fi
 

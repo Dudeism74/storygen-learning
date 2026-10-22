@@ -121,7 +121,7 @@ async def run_two_agent_workflow(websocket: WebSocket, user_id: str, keywords: s
 
     except Exception as e:
         logger.error(f"Story generation failed for user {user_id}: {e}")
-        await websocket.send_text(json.dumps({"type": "error", "message": f"Story generation failed: {e}"}))
+        await websocket.send_text(json.dumps({"type": "error", "message": "Generation is temporarily unavailable. Please try again."}))
         return
 
     # Step 2: Generate images using DirectImageAgent
@@ -186,7 +186,7 @@ async def run_two_agent_workflow(websocket: WebSocket, user_id: str, keywords: s
                     "scene_title": scene.get("title", ""),
                     "format": "png",
                     "stored_in_bucket": False,
-                    "error": f"Image generation failed: {str(e)}",
+                    "error": "Generation is temporarily unavailable. Please try again.",
                     "placeholder": True
                 }
                 await websocket.send_text(json.dumps({
@@ -211,6 +211,31 @@ async def run_two_agent_workflow(websocket: WebSocket, user_id: str, keywords: s
 
 
 
+# Limit work accepted from the public WebSocket before calling paid AI services.
+MAX_MESSAGE_BYTES = 16 * 1024
+MAX_KEYWORD_CHARACTERS = 2000
+
+
+def parse_client_message(raw):
+    if not isinstance(raw, str) or len(raw.encode("utf-8")) > MAX_MESSAGE_BYTES:
+        raise ValueError("Invalid message")
+    try:
+        message = json.loads(raw)
+    except (ValueError, RecursionError):
+        raise ValueError("Invalid message") from None
+    if not isinstance(message, dict):
+        raise ValueError("Invalid message")
+    kind = message.get("type")
+    if kind == "ping":
+        return "ping", ""
+    if kind != "generate_story":
+        raise ValueError("Invalid message")
+    keywords = message.get("data")
+    if not isinstance(keywords, str) or not 1 <= len(keywords.strip()) <= MAX_KEYWORD_CHARACTERS:
+        raise ValueError("Invalid message")
+    return kind, keywords.strip()
+
+
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
     """
@@ -233,10 +258,14 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
         while True:
             # Receive message from client
             message_json = await websocket.receive_text()
-            message = json.loads(message_json)
-
-            message_type = message.get("type")
-            data = message.get("data", "")
+            try:
+                message_type, data = parse_client_message(message_json)
+            except ValueError:
+                await websocket.send_text(json.dumps({
+                    "type": "error",
+                    "message": "Enter story keywords between 1 and 2,000 characters."
+                }))
+                continue
 
             if message_type == "generate_story":
                 try:
@@ -253,7 +282,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     logger.error(f"Error in websocket workflow for user {user_id}: {e}")
                     await websocket.send_text(json.dumps({
                         "type": "error",
-                        "message": f"Workflow failed: {str(e)}"
+                        "message": "Generation is temporarily unavailable. Please try again."
                     }))
 
             elif message_type == "ping":
@@ -270,7 +299,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
         try:
             await websocket.send_text(json.dumps({
                 "type": "error",
-                "message": f"Server error: {str(e)}"
+                "message": "Generation is temporarily unavailable. Please try again."
             }))
         except:
             pass

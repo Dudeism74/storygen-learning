@@ -1,0 +1,16 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Exact public Secret Manager resource name, not its secret value"
+condition = "AND"
+paths = ['''^env\.template$''']
+regexTarget = "match"
+regexes = ['''SECRET_MANAGER=storygen-google-api-key''']
+
+[[allowlists]]
+description = "Exact public Secret Manager resource name in deployment example"
+condition = "AND"
+paths = ['''(^|/)06_Final_Solution/\.github/config/deployment\.yml$''']
+regexTarget = "match"
+regexes = ['''secret_manager: "sdlcv3-api-secret"''']

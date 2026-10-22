@@ -1,4 +1,5 @@
 import { Loader2, Eye, Download } from 'lucide-react';
+import { storyImageUrl, showStoryImage } from '../lib/story-image.mjs';
 
 interface GeneratedImage {
   index: number;
@@ -121,18 +122,8 @@ export default function StoryFrames({
 
   const openImageInNewTab = (image: GeneratedImage) => {
     try {
-      const imageUrl = image.gcs_url || `data:image/${image.format};base64,${image.base64}`;
-      const newTab = window.open();
-      if (newTab) {
-        newTab.document.write(`
-          <html>
-            <head><title>Story Frame</title></head>
-            <body style="margin:0; display:flex; justify-content:center; align-items:center; min-height:100vh; background:#000;">
-              <img src="${imageUrl}" style="max-width:100%; max-height:100%; object-fit:contain;" />
-            </body>
-          </html>
-        `);
-      }
+      const imageUrl = storyImageUrl(image);
+      if (imageUrl) showStoryImage(window.open('', '_blank'), imageUrl);
     } catch (error) {
       console.error('Error opening image:', error);
     }
@@ -140,11 +131,13 @@ export default function StoryFrames({
 
   const downloadImage = (image: GeneratedImage, index: number) => {
     try {
-      if (image.gcs_url) {
-        window.open(image.gcs_url, '_blank');
-      } else if (image.base64) {
+      const imageUrl = storyImageUrl(image);
+      if (!imageUrl) return;
+      if (imageUrl.startsWith('https:')) {
+        window.open(imageUrl, '_blank', 'noopener,noreferrer');
+      } else {
         const link = document.createElement('a');
-        link.href = `data:image/${image.format};base64,${image.base64}`;
+        link.href = imageUrl;
         link.download = `story-frame-${index + 1}.${image.format}`;
         link.click();
       }
@@ -205,14 +198,14 @@ export default function StoryFrames({
                   ) : (
                   <div className="group relative h-full w-full overflow-hidden rounded-lg">
                     <img
-                        src={img.gcs_url && !img.gcs_error ? img.gcs_url : (img.base64 ? `data:image/${img.format};base64,${img.base64}` : '')}
+                        src={storyImageUrl(img)}
                       alt={`Story image ${i + 1}`}
                       className="h-full w-full object-cover"
                         onError={(e) => {
                           // If GCS URL fails, try base64
                           if (img.gcs_url && img.base64) {
                             console.log(`GCS URL failed for image ${i + 1}, falling back to base64`);
-                            (e.target as HTMLImageElement).src = `data:image/${img.format};base64,${img.base64}`;
+                            (e.target as HTMLImageElement).src = storyImageUrl({ ...img, gcs_error: true });
                             // Mark that GCS failed to prevent retry
                             img.gcs_error = true;
                           }
